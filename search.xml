@@ -54,31 +54,6 @@
     
     
     <entry>
-      <title>Off-By-One单字节缓冲区溢出漏洞</title>
-      <link href="/2024/11/10/Off-By-One/"/>
-      <url>/2024/11/10/Off-By-One/</url>
-      
-        <content type="html"><![CDATA[<h1 id="Off-By-One单字节缓冲区溢出漏洞"><a href="#Off-By-One单字节缓冲区溢出漏洞" class="headerlink" title="Off-By-One单字节缓冲区溢出漏洞"></a>Off-By-One单字节缓冲区溢出漏洞</h1><h2 id="概论"><a href="#概论" class="headerlink" title="概论"></a>概论</h2><p>严格来说 off-by-one 漏洞是一种特殊的溢出漏洞，off-by-one 指程序向缓冲区中写入时，写入的字节数超过了这个缓冲区本身所申请的字节数并且只越界了一个字节。</p><h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>off-by-one 是指单字节缓冲区溢出，这种漏洞的产生往往与边界验证不严和字符串操作有关，当然也不排除写入的 size 正好就只多了一个字节的情况。其中边界验证不严通常包括</p><ul><li>使用循环语句向堆块中写入数据时，循环的次数设置错误（这在 C 语言初学者中很常见）导致多写入了一个字节。</li><li>字符串操作不合适</li></ul><p>一般来说，单字节溢出被认为是难以利用的，但是因为 Linux 的堆管理机制 ptmalloc 验证的松散性，基于 Linux 堆的 off-by-one 漏洞利用起来并不复杂，并且威力强大。 此外，需要说明的一点是 off-by-one 是可以基于各种缓冲区的，比如栈、bss 段等等，但是堆上（heap based） 的 off-by-one 是 CTF 中比较常见的。我们这里仅讨论堆上的 off-by-one 情况。</p><h2 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h2><ol><li><p><strong>溢出字节为可控制任意字节</strong>：通过修改大小造成块结构之间出现重叠，从而泄露其他块数据，或是覆盖其他块数据。也可使用 NULL 字节溢出的方法</p></li><li><p><strong>溢出字节为 NULL 字节</strong>：在 size 为 0x100 的时候，溢出 NULL 字节可以使得 <code>prev_in_use</code> 位被清，这样前块会被认为是 free 块。（1） 这时可以选择使用 unlink 方法（见 unlink 部分）进行处理。</p><p>（2） 另外，这时 <code>prev_size</code> 域就会启用，就可以伪造 <code>prev_size</code> ，从而造成块之间发生重叠。此方法的关键在于 unlink 的时候没有检查按照 <code>prev_size</code> 找到的块的大小与<code>prev_size</code> 是否一致。</p></li></ol>]]></content>
-      
-      
-      <categories>
-          
-          <category> 网络安全学习 </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> OBO漏洞 </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
       <title>ORW沙箱逃逸</title>
       <link href="/2024/11/10/ORW%E6%B2%99%E7%AE%B1%E9%80%83%E9%80%B8/"/>
       <url>/2024/11/10/ORW%E6%B2%99%E7%AE%B1%E9%80%83%E9%80%B8/</url>
@@ -104,11 +79,11 @@
     
     
     <entry>
-      <title>UAF漏洞</title>
-      <link href="/2024/11/10/Use-after-free/"/>
-      <url>/2024/11/10/Use-after-free/</url>
+      <title>Off-By-One单字节缓冲区溢出漏洞</title>
+      <link href="/2024/11/10/Off-By-One/"/>
+      <url>/2024/11/10/Off-By-One/</url>
       
-        <content type="html"><![CDATA[<h1 id="UAF-use-after-free-漏洞"><a href="#UAF-use-after-free-漏洞" class="headerlink" title="UAF(use after free)漏洞"></a>UAF(use after free)漏洞</h1><h2 id="Double-Free（双重释放漏洞）"><a href="#Double-Free（双重释放漏洞）" class="headerlink" title="Double Free（双重释放漏洞）"></a>Double Free（双重释放漏洞）</h2><p>Double Free，即双重释放，是指在程序中对同一块内存使用 <code>free()</code> 函数（在C或C++语言中）释放两次。这种情况通常发生在手动管理内存的编程语言中，如C和C++。当一个动态分配的内存块不再需要时，应该通过调用 <code>free()</code> 函数来释放这块内存。然而，如果这块内存已经被释放过一次，再次尝试释放就会导致“双重释放”的错误。</p><h3 id="双重释放形成的原因"><a href="#双重释放形成的原因" class="headerlink" title="双重释放形成的原因"></a>双重释放形成的原因</h3><h4 id="重复调用-free-：对同一个指针两次调用-free-，而没有在第一次释放后将其置为-NULL。"><a href="#重复调用-free-：对同一个指针两次调用-free-，而没有在第一次释放后将其置为-NULL。" class="headerlink" title="重复调用 free()：对同一个指针两次调用 free()，而没有在第一次释放后将其置为 NULL。"></a><strong>重复调用 <code>free()</code></strong>：对同一个指针两次调用 <code>free()</code>，而没有在第一次释放后将其置为 <code>NULL</code>。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">free(ptr);</span><br><span class="line">free(ptr); // 双重释放</span><br></pre></td></tr></table></figure><h4 id="未置空的指针：释放内存后没有将指针置为-NULL，后续误操作再次释放。"><a href="#未置空的指针：释放内存后没有将指针置为-NULL，后续误操作再次释放。" class="headerlink" title="未置空的指针：释放内存后没有将指针置为 NULL，后续误操作再次释放。"></a><strong>未置空的指针</strong>：释放内存后没有将指针置为 <code>NULL</code>，后续误操作再次释放。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">free(ptr);</span><br><span class="line">// 没有 ptr = NULL;</span><br><span class="line">free(ptr); // 错误</span><br></pre></td></tr></table></figure><h4 id="多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用-free-。"><a href="#多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用-free-。" class="headerlink" title="多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用 free()。"></a><strong>多个指针指向同一块内存</strong>：两个指针指向同一块动态分配的内存，分别对其调用 <code>free()</code>。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">int *p1 = malloc(sizeof(int));</span><br><span class="line">int *p2 = p1;</span><br><span class="line">free(p1);</span><br><span class="line">free(p2); // 双重释放</span><br></pre></td></tr></table></figure><h4 id="错误的对象管理："><a href="#错误的对象管理：" class="headerlink" title="错误的对象管理："></a><strong>错误的对象管理</strong>：</h4><p>在C++中，如果类的对象包含动态分配的资源，但未正确实现拷贝构造函数或赋值操作符（深拷贝），可能导致两个对象尝试释放同一块内存。</p><h4 id="多线程竞争："><a href="#多线程竞争：" class="headerlink" title="多线程竞争："></a><strong>多线程竞争</strong>：</h4><p>多个线程同时释放同一块内存，缺乏同步保护。</p><h4 id="库函数误用："><a href="#库函数误用：" class="headerlink" title="库函数误用："></a><strong>库函数误用</strong>：</h4><p>某些库函数可能已经释放了传入的内存，外部又再次释放。</p>]]></content>
+        <content type="html"><![CDATA[<h1 id="Off-By-One单字节缓冲区溢出漏洞"><a href="#Off-By-One单字节缓冲区溢出漏洞" class="headerlink" title="Off-By-One单字节缓冲区溢出漏洞"></a>Off-By-One单字节缓冲区溢出漏洞</h1><h2 id="概论"><a href="#概论" class="headerlink" title="概论"></a>概论</h2><p>严格来说 off-by-one 漏洞是一种特殊的溢出漏洞，off-by-one 指程序向缓冲区中写入时，写入的字节数超过了这个缓冲区本身所申请的字节数并且只越界了一个字节。</p><h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>off-by-one 是指单字节缓冲区溢出，这种漏洞的产生往往与边界验证不严和字符串操作有关，当然也不排除写入的 size 正好就只多了一个字节的情况。其中边界验证不严通常包括</p><ul><li>使用循环语句向堆块中写入数据时，循环的次数设置错误（这在 C 语言初学者中很常见）导致多写入了一个字节。</li><li>字符串操作不合适</li></ul><p>一般来说，单字节溢出被认为是难以利用的，但是因为 Linux 的堆管理机制 ptmalloc 验证的松散性，基于 Linux 堆的 off-by-one 漏洞利用起来并不复杂，并且威力强大。 此外，需要说明的一点是 off-by-one 是可以基于各种缓冲区的，比如栈、bss 段等等，但是堆上（heap based） 的 off-by-one 是 CTF 中比较常见的。我们这里仅讨论堆上的 off-by-one 情况。</p><h2 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h2><ol><li><p><strong>溢出字节为可控制任意字节</strong>：通过修改大小造成块结构之间出现重叠，从而泄露其他块数据，或是覆盖其他块数据。也可使用 NULL 字节溢出的方法</p></li><li><p><strong>溢出字节为 NULL 字节</strong>：在 size 为 0x100 的时候，溢出 NULL 字节可以使得 <code>prev_in_use</code> 位被清，这样前块会被认为是 free 块。（1） 这时可以选择使用 unlink 方法（见 unlink 部分）进行处理。</p><p>（2） 另外，这时 <code>prev_size</code> 域就会启用，就可以伪造 <code>prev_size</code> ，从而造成块之间发生重叠。此方法的关键在于 unlink 的时候没有检查按照 <code>prev_size</code> 找到的块的大小与<code>prev_size</code> 是否一致。</p></li></ol>]]></content>
       
       
       <categories>
@@ -120,7 +95,7 @@
       
         <tags>
             
-            <tag> UAF漏洞 </tag>
+            <tag> OBO漏洞 </tag>
             
         </tags>
       
@@ -146,6 +121,31 @@
         <tags>
             
             <tag> shellcode </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>UAF漏洞</title>
+      <link href="/2024/11/10/Use-after-free/"/>
+      <url>/2024/11/10/Use-after-free/</url>
+      
+        <content type="html"><![CDATA[<h1 id="UAF-use-after-free-漏洞"><a href="#UAF-use-after-free-漏洞" class="headerlink" title="UAF(use after free)漏洞"></a>UAF(use after free)漏洞</h1><h2 id="Double-Free（双重释放漏洞）"><a href="#Double-Free（双重释放漏洞）" class="headerlink" title="Double Free（双重释放漏洞）"></a>Double Free（双重释放漏洞）</h2><p>Double Free，即双重释放，是指在程序中对同一块内存使用 <code>free()</code> 函数（在C或C++语言中）释放两次。这种情况通常发生在手动管理内存的编程语言中，如C和C++。当一个动态分配的内存块不再需要时，应该通过调用 <code>free()</code> 函数来释放这块内存。然而，如果这块内存已经被释放过一次，再次尝试释放就会导致“双重释放”的错误。</p><h3 id="双重释放形成的原因"><a href="#双重释放形成的原因" class="headerlink" title="双重释放形成的原因"></a>双重释放形成的原因</h3><h4 id="重复调用-free-：对同一个指针两次调用-free-，而没有在第一次释放后将其置为-NULL。"><a href="#重复调用-free-：对同一个指针两次调用-free-，而没有在第一次释放后将其置为-NULL。" class="headerlink" title="重复调用 free()：对同一个指针两次调用 free()，而没有在第一次释放后将其置为 NULL。"></a><strong>重复调用 <code>free()</code></strong>：对同一个指针两次调用 <code>free()</code>，而没有在第一次释放后将其置为 <code>NULL</code>。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">free(ptr);</span><br><span class="line">free(ptr); // 双重释放</span><br></pre></td></tr></table></figure><h4 id="未置空的指针：释放内存后没有将指针置为-NULL，后续误操作再次释放。"><a href="#未置空的指针：释放内存后没有将指针置为-NULL，后续误操作再次释放。" class="headerlink" title="未置空的指针：释放内存后没有将指针置为 NULL，后续误操作再次释放。"></a><strong>未置空的指针</strong>：释放内存后没有将指针置为 <code>NULL</code>，后续误操作再次释放。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">free(ptr);</span><br><span class="line">// 没有 ptr = NULL;</span><br><span class="line">free(ptr); // 错误</span><br></pre></td></tr></table></figure><h4 id="多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用-free-。"><a href="#多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用-free-。" class="headerlink" title="多个指针指向同一块内存：两个指针指向同一块动态分配的内存，分别对其调用 free()。"></a><strong>多个指针指向同一块内存</strong>：两个指针指向同一块动态分配的内存，分别对其调用 <code>free()</code>。</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">int *p1 = malloc(sizeof(int));</span><br><span class="line">int *p2 = p1;</span><br><span class="line">free(p1);</span><br><span class="line">free(p2); // 双重释放</span><br></pre></td></tr></table></figure><h4 id="错误的对象管理："><a href="#错误的对象管理：" class="headerlink" title="错误的对象管理："></a><strong>错误的对象管理</strong>：</h4><p>在C++中，如果类的对象包含动态分配的资源，但未正确实现拷贝构造函数或赋值操作符（深拷贝），可能导致两个对象尝试释放同一块内存。</p><h4 id="多线程竞争："><a href="#多线程竞争：" class="headerlink" title="多线程竞争："></a><strong>多线程竞争</strong>：</h4><p>多个线程同时释放同一块内存，缺乏同步保护。</p><h4 id="库函数误用："><a href="#库函数误用：" class="headerlink" title="库函数误用："></a><strong>库函数误用</strong>：</h4><p>某些库函数可能已经释放了传入的内存，外部又再次释放。</p>]]></content>
+      
+      
+      <categories>
+          
+          <category> 网络安全学习 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> UAF漏洞 </tag>
             
         </tags>
       
